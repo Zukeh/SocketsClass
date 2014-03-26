@@ -23,6 +23,7 @@ using namespace std;
 
 #ifdef _DEBUG
 	#define DEBUG(msg) XTrace(msg)
+	#define DEBUGP(msg, p) XTrace(msg, p)
 #else
 	#define DEBUG(msg, params)
 #endif
@@ -53,7 +54,7 @@ class TCP_Client
 		SOCKET			GetSocket();
 		void			SetOptions(TCP_Client_opts opts_set);
 		TCP_Client_opts	GetOptions();
-		BOOL			Connect(string server, int port);
+		BOOL			Connect(string server, int port, int timeout = 30);
 		int				Send(string data);
 		int				Recv(string *data);
 		BOOL			IsConnected();

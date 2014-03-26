@@ -8,7 +8,7 @@ using namespace std;
 int main(int argc, char *argv)
 {
 	TCP_Client tc;
-	tc.Connect("127.0.0.1", 9999);
+	tc.Connect("111.222.222.11", 9999);
 	tc.Send("HEllo");
 	string data;
 	tc.Recv(&data);

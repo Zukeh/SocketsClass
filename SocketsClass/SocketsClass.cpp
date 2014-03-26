@@ -53,9 +53,12 @@ int TCP_Client::Disconnect()
 	return shutdown(s, 2);
 }
 
-BOOL TCP_Client::Connect(string server, int port)
+BOOL TCP_Client::Connect(string server, int port, int timeout)
 {
 	struct sockaddr_in RemoteHost;
+	TIMEVAL Timeout;
+	Timeout.tv_sec = timeout;
+	Timeout.tv_usec = 0;
 
 #ifdef W32
 	WSADATA       wsd;
@@ -70,7 +73,7 @@ BOOL TCP_Client::Connect(string server, int port)
 	if (s == SOCKET_ERROR)
 	{
 		//Create socket
-		s = socket(AF_INET, SOCK_STREAM, 0);
+		s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (s == SOCKET_ERROR)
 		{
 			DEBUG(L"Could not create socket");
@@ -99,18 +102,56 @@ BOOL TCP_Client::Connect(string server, int port)
 	RemoteHost.sin_family = AF_INET;
 	RemoteHost.sin_port = htons(port);
 
-	//Connect to remote server
-	if (connect(s, (struct sockaddr *)&RemoteHost, sizeof(RemoteHost)) < 0)
+	//set the socket in non-blocking
+	unsigned long iMode = 1;
+	int iResult = ioctlsocket(s, FIONBIO, &iMode);
+	if (iResult != NO_ERROR)
 	{
-		DEBUG(L"connect() failed");
+		DEBUGP(L"ioctlsocket failed with error: %ld\n", iResult);
 		return FALSE;
 	}
 
-	connected = TRUE;
-	starttime = time(0);
-	stats.download = 0;
-	stats.upload = 0;
-	return TRUE;
+	//Connect to remote server
+	if (connect(s, (struct sockaddr *)&RemoteHost, sizeof(RemoteHost)) < 0)
+	{
+		printf("%i", WSAGetLastError());
+#ifdef W32
+		if (WSAGetLastError() != WSAEWOULDBLOCK)
+#else
+		if (errno != EINPROGRESS)
+#endif
+		{
+			DEBUG(L"connect() failed");
+			return FALSE;
+		}		
+	}
+
+	// restart the socket mode
+	iMode = 0;
+	iResult = ioctlsocket(s, FIONBIO, &iMode);
+	if (iResult != NO_ERROR)
+	{
+		DEBUGP(L"ioctlsocket failed with error: %ld\n", iResult);
+		return FALSE;
+	}
+
+	fd_set Write, Err;
+	FD_ZERO(&Write);
+	FD_ZERO(&Err);
+	FD_SET(s, &Write);
+	FD_SET(s, &Err);
+
+	// check if the socket is ready
+	select(0, NULL, &Write, &Err, &Timeout);
+	if (FD_ISSET(s, &Write))
+	{
+		connected = TRUE;
+		starttime = time(0);
+		stats.download = 0;
+		stats.upload = 0;
+		return TRUE;
+	}
+	return FALSE;
 }
 
 TCP_Stats TCP_Client::GetStats()
